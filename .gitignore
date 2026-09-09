@@ -1,0 +1,4 @@
+# Básicos
+.env
+calories.db
+*.pyc

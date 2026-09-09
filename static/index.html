@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NutriPulse AI - Seguimiento Inteligente de Calorías</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              emerald: '#10b981',
+              cyan: '#06b6d4',
+              purple: '#8b5cf6',
+              amber: '#f59e0b',
+              rose: '#f43f5e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col space-y-2 w-80 max-w-full"></div>
+
+  <!-- Navigation / Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <svg class="w-6 h-6 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-xl font-black tracking-tight text-white" data-i18n="app_title">NutriPulse AI</h1>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Gemini 2.5</span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block" data-i18n="app_tagline">Nutrición Inteligente y Presupuesto Energético</p>
+        </div>
+      </div>
+
+      <!-- Center: Date Controls -->
+      <div class="flex items-center bg-slate-800/80 border border-slate-700/80 rounded-xl p-1 shadow-inner">
+        <button id="yesterdayBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-300 hover:bg-slate-700 transition" data-i18n="yesterday">Ayer</button>
+        <button id="todayBtn" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition" data-i18n="today">Hoy</button>
+        <div class="h-4 w-px bg-slate-700 mx-1"></div>
+        <input type="date" id="datePicker"
+          class="bg-transparent text-xs text-slate-200 px-2 py-1 focus:outline-none cursor-pointer" />
+      </div>
+
+      <!-- Right: Action Buttons -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- TDEE Calculator Button -->
+        <button id="openTdeeBtn"
+          class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition shadow-sm">
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          </svg>
+          <span class="hidden md:inline" data-i18n="tdee_btn">Calculadora TDEE</span>
+        </button>
+
+        <!-- API Key Settings Button -->
+        <button id="openApiKeyBtn"
+          class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition shadow-sm">
+          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+          </svg>
+          <span class="hidden md:inline" data-i18n="settings_btn">API Key</span>
+        </button>
+
+        <!-- Language Switcher Button -->
+        <button id="langToggleBtn"
+          class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition">
+          English 🇺🇸
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Warning Banner if API Key is Missing -->
+  <div id="apiKeyWarningBanner" class="hidden bg-gradient-to-r from-purple-950 via-slate-900 to-purple-950 border-b border-purple-800/60 px-4 py-2 text-center text-xs text-purple-200">
+    <span data-i18n="missing_key_warning">⚠️ Se requiere una Gemini API Key para el análisis por IA. Haz clic en 'API Key' para configurarla.</span>
+    <button onclick="openApiKeyModal()" class="ml-2 underline font-semibold text-purple-300 hover:text-white">Configurar ahora →</button>
+  </div>
+
+  <!-- Main Content Layout -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-8">
+
+    <!-- TOP SECTION: DYNAMIC ENERGY BUDGET & MACROS -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Energy Budget Breakdown (7 cols) -->
+      <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span data-i18n="energy_budget_title">Presupuesto Energético Dinámico</span>
+            </h2>
+            <p class="text-xs text-slate-400" data-i18n="budget_formula_desc">Ecuación: Base + Pasos - Comida = Restante</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-6 items-center">
+          
+          <!-- Donut Gauge Chart (5 cols) -->
+          <div class="sm:col-span-5 flex flex-col items-center justify-center">
+            <div class="donut-container">
+              <canvas id="calorieDonutCanvas" width="220" height="220"></canvas>
+              <div class="donut-center-text">
+                <span id="donutCenterStatus" class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Restantes</span>
+                <div id="donutCenterValue" class="text-3xl font-extrabold text-white">0</div>
+                <div id="donutCenterSubtext" class="text-[11px] text-slate-400">kcal / 0</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Equation Breakdown Cards (7 cols) -->
+          <div class="sm:col-span-7 space-y-3">
+            <div class="grid grid-cols-3 gap-2 text-center">
+              
+              <!-- Base Goal -->
+              <div class="bg-slate-800/70 border border-slate-700/60 rounded-xl p-3">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="base_goal">Meta Base</span>
+                <span id="eqBaseVal" class="text-sm sm:text-base font-extrabold text-cyan-400 mt-0.5 block">0 kcal</span>
+              </div>
+
+              <!-- Steps Burned -->
+              <div class="bg-slate-800/70 border border-slate-700/60 rounded-xl p-3">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="steps_burned">Pasos</span>
+                <span id="eqStepsVal" class="text-sm sm:text-base font-extrabold text-purple-400 mt-0.5 block">+0 kcal</span>
+              </div>
+
+              <!-- Food Consumed -->
+              <div class="bg-slate-800/70 border border-slate-700/60 rounded-xl p-3">
+                <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="food_consumed">Comida</span>
+                <span id="eqFoodVal" class="text-sm sm:text-base font-extrabold text-amber-400 mt-0.5 block">-0 kcal</span>
+              </div>
+
+            </div>
+
+            <!-- Net Remaining Banner -->
+            <div class="bg-slate-800/90 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                  =
+                </div>
+                <div>
+                  <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider block" data-i18n="remaining">Calorías Restantes</span>
+                  <span class="text-[10px] text-slate-400">Presupuesto Ajustado del Día</span>
+                </div>
+              </div>
+              <span id="eqRemainingVal" class="text-2xl font-extrabold text-emerald-400">0 kcal</span>
+            </div>
+
+            <!-- Steps Input Quick Bar -->
+            <div class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex items-center justify-between space-x-3">
+              <div class="flex items-center space-x-2 flex-1">
+                <svg class="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <div class="flex-1">
+                  <input type="number" id="stepsInput" min="0" max="100000" step="100" placeholder="Pasos hoy (ej. 8500)"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500" />
+                </div>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span id="stepsBurnVal" class="text-xs font-mono font-bold text-purple-400">+0 kcal</span>
+                <button id="saveStepsBtn"
+                  class="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-lg shadow transition"
+                  data-i18n="save_steps">Guardar</button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Macronutrients Tracking (5 cols) -->
+      <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2 mb-1">
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <span>Macronutrientes Diarios</span>
+          </h2>
+          <p class="text-xs text-slate-400 mb-6">Consumo frente a tu estrategia de nutrición</p>
+
+          <!-- Macro Bars -->
+          <div class="space-y-5">
+            
+            <!-- Protein -->
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <span class="font-bold text-blue-400 flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                  <span data-i18n="protein">Proteína</span>
+                </span>
+                <div class="font-mono">
+                  <span id="macro_protein_current" class="text-white font-bold">0g</span>
+                  <span id="macro_protein_target" class="text-slate-400">/ 0g</span>
+                  <span id="macro_protein_pct" class="text-blue-400 font-semibold ml-1.5">(0%)</span>
+                </div>
+              </div>
+              <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div id="macro_protein_bar" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Carbohydrates -->
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <span class="font-bold text-cyan-400 flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span>
+                  <span data-i18n="carbs">Carbohidratos</span>
+                </span>
+                <div class="font-mono">
+                  <span id="macro_carbs_current" class="text-white font-bold">0g</span>
+                  <span id="macro_carbs_target" class="text-slate-400">/ 0g</span>
+                  <span id="macro_carbs_pct" class="text-cyan-400 font-semibold ml-1.5">(0%)</span>
+                </div>
+              </div>
+              <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div id="macro_carbs_bar" class="bg-cyan-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Fats -->
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <span class="font-bold text-amber-400 flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                  <span data-i18n="fat">Grasa</span>
+                </span>
+                <div class="font-mono">
+                  <span id="macro_fat_current" class="text-white font-bold">0g</span>
+                  <span id="macro_fat_target" class="text-slate-400">/ 0g</span>
+                  <span id="macro_fat_pct" class="text-amber-400 font-semibold ml-1.5">(0%)</span>
+                </div>
+              </div>
+              <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div id="macro_fat_bar" class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Formula hint footer -->
+        <div class="pt-4 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+          <span data-i18n="step_formula_hint">Fórmula: (Pasos / 1000) * Peso * 0.5 kcal</span>
+          <button onclick="openCalculatorModal()" class="text-cyan-400 hover:text-cyan-300 font-medium">Ajustar metas →</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- MIDDLE SECTION: LLM NATURAL LANGUAGE FOOD LOGGER -->
+    <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl relative">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            <span data-i18n="ai_logger_title">Registro Inteligente con Gemini 2.5 Flash</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5" data-i18n="ai_logger_subtitle">
+            Escribe en lenguaje natural lo que comiste y la IA extraerá porciones y macronutrientes estructurados.
+          </p>
+        </div>
+
+        <!-- Sample Food Chips -->
+        <div class="flex flex-wrap gap-2 mt-3 sm:mt-0">
+          <button type="button" class="sample-meal-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 transition"
+            data-sample="sample_1_text" data-i18n="sample_btn_1">🐟 Atún y pan tostado</button>
+          <button type="button" class="sample-meal-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 transition"
+            data-sample="sample_2_text" data-i18n="sample_btn_2">🍗 Pechuga, arroz y ensalada</button>
+          <button type="button" class="sample-meal-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 transition"
+            data-sample="sample_3_text" data-i18n="sample_btn_3">🥣 Avena, plátano y nueces</button>
+        </div>
+      </div>
+
+      <!-- Natural Language Input Area -->
+      <div class="relative">
+        <textarea id="aiMealInput" rows="3"
+          placeholder="Ej: Comí media lata de atún, 2 rebanadas de pan blanco tostado y una taza de café con leche descremada..."
+          data-i18n-placeholder="ai_input_placeholder"
+          class="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-none"></textarea>
+
+        <div class="absolute bottom-3 right-3 flex items-center space-x-2">
+          <button id="aiAnalyzeBtn"
+            class="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-lg shadow-lg shadow-emerald-500/20 transition active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span data-i18n="ai_analyze_btn">Analizar con IA</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Animated Loading Progress Bar -->
+      <div id="aiProgressContainer" class="hidden mt-4 pt-3 border-t border-slate-800">
+        <div class="flex items-center justify-between text-xs mb-1.5">
+          <span id="aiProgressStatus" class="text-emerald-400 font-medium flex items-center space-x-2">
+            <svg class="animate-spin h-3.5 w-3.5 text-emerald-400 inline" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span class="ml-1.5" data-i18n="ai_analyzing">Analizando comida...</span>
+          </span>
+          <span class="text-[10px] text-slate-400 font-mono">Gemini 2.5 Flash</span>
+        </div>
+        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+          <div id="aiProgressBar" class="gradient-progress-bar h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- BOTTOM SECTION: LOGGED MEALS OF THE DAY -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+          <span data-i18n="daily_meals_title">Comidas del Día</span>
+        </h3>
+      </div>
+
+      <!-- Empty State -->
+      <div id="noMealsEmptyState" class="hidden bg-slate-900/60 border border-dashed border-slate-800 rounded-2xl p-10 text-center">
+        <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+          🍽️
+        </div>
+        <p class="text-sm text-slate-300 font-medium" data-i18n="no_meals_message">
+          No hay comidas registradas para este día. ¡Usa el registro con IA para empezar!
+        </p>
+      </div>
+
+      <!-- Meals Cards Grid -->
+      <div id="dailyMealsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- HISTORICAL ANALYTICS & TRENDS SECTION -->
+    <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+            </svg>
+            <span data-i18n="analytics_title">Analíticas y Tendencias Históricas</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">Seguimiento de consistencia calórica, reparto nutricional y actividad</p>
+        </div>
+
+        <!-- Range Selector Tabs -->
+        <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1 mt-3 sm:mt-0">
+          <button class="analytics-tab-btn px-3 py-1 text-xs font-semibold rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition"
+            data-days="7" data-i18n="analytics_7_days">7 Días</button>
+          <button class="analytics-tab-btn px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition"
+            data-days="14" data-i18n="analytics_14_days">14 Días</button>
+          <button class="analytics-tab-btn px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition"
+            data-days="30" data-i18n="analytics_30_days">30 Días</button>
+        </div>
+      </div>
+
+      <!-- Summary Metrics Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="metric_avg_cals">Promedio Calorías</span>
+            <span id="analyticsAvgCals" class="text-xl font-black text-emerald-400 mt-1 block">0 kcal</span>
+          </div>
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-lg">🔥</div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="metric_avg_steps">Promedio Pasos</span>
+            <span id="analyticsAvgSteps" class="text-xl font-black text-purple-400 mt-1 block">0</span>
+          </div>
+          <div class="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-lg">👟</div>
+        </div>
+
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="metric_avg_protein">Promedio Proteína</span>
+            <span id="analyticsAvgProtein" class="text-xl font-black text-blue-400 mt-1 block">0 g</span>
+          </div>
+          <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-lg">🥩</div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Chart 1: Calories vs Budget -->
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3" data-i18n="chart_calories_title">
+            Calorías Consumidas vs Presupuesto Ajustado
+          </h4>
+          <div class="h-64">
+            <canvas id="calorieTrendCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Macronutrients Breakdown Over Time -->
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3" data-i18n="chart_macros_title">
+            Consumo de Macronutrientes en el Tiempo
+          </h4>
+          <div class="h-64">
+            <canvas id="macroTrendCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 3: Steps & Burn Trend (Full Width) -->
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 lg:col-span-2">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3" data-i18n="chart_steps_title">
+            Pasos y Calorías Quemadas
+          </h4>
+          <div class="h-64">
+            <canvas id="stepsTrendCanvas"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
+    <p>NutriPulse AI &copy; 2026 &bull; Basado en Mifflin-St Jeor &bull; Gemini 2.5 Flash Structured Outputs</p>
+  </footer>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- MODAL 1: MEAL REVIEW & EDIT MODAL -->
+  <div id="mealReviewModal" class="modal-overlay modal-hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+    <div class="modal-content bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl shadow-2xl p-6 space-y-5 my-8">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 id="mealReviewModalTitle" class="text-lg font-bold text-white flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span data-i18n="review_modal_title_create">Revisar y Confirmar Comida</span>
+        </h3>
+        <button onclick="closeMealReviewModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <!-- Meal Info Fields -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="meal_name_label">Nombre de la Comida</label>
+          <input type="text" id="reviewMealName"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="meal_type_label">Tipo de Comida</label>
+          <select id="reviewMealType"
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+            <option value="breakfast" data-i18n="meal_type_breakfast">Desayuno</option>
+            <option value="lunch" data-i18n="meal_type_lunch">Almuerzo</option>
+            <option value="dinner" data-i18n="meal_type_dinner">Cena</option>
+            <option value="snack" data-i18n="meal_type_snack">Snack / Merienda</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Interactive Food Items Table -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400" data-i18n="items_table_title">Desglose de Alimentos</span>
+          <button type="button" id="addReviewItemBtn"
+            class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 transition"
+            data-i18n="add_item_btn">+ Agregar Ítem</button>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-800 rounded-xl">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-950/80 text-[11px] text-slate-400 uppercase font-semibold border-b border-slate-800">
+              <tr>
+                <th class="py-2.5 px-3" data-i18n="col_name">Alimento</th>
+                <th class="py-2.5 px-3" data-i18n="col_portion">Porción</th>
+                <th class="py-2.5 px-2 text-right" data-i18n="col_weight">Gramos (g)</th>
+                <th class="py-2.5 px-2 text-right" data-i18n="col_calories">Calorías</th>
+                <th class="py-2.5 px-2 text-right" data-i18n="col_protein">Prot (g)</th>
+                <th class="py-2.5 px-2 text-right" data-i18n="col_carbs">Carbs (g)</th>
+                <th class="py-2.5 px-2 text-right" data-i18n="col_fat">Grasa (g)</th>
+                <th class="py-2.5 px-2 text-center" data-i18n="col_actions"></th>
+              </tr>
+            </thead>
+            <tbody id="reviewItemsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal Footer & Real-time Totals -->
+      <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <span class="text-[11px] text-slate-400 uppercase font-bold tracking-wider block" data-i18n="modal_totals_title">Totales de la Comida</span>
+          <div class="flex items-center space-x-4 font-mono mt-1 text-sm">
+            <span id="reviewTotalCalories" class="text-emerald-400 font-extrabold text-base">0 kcal</span>
+            <span id="reviewTotalProtein" class="text-blue-400 font-bold">0.0g P</span>
+            <span id="reviewTotalCarbs" class="text-cyan-400 font-bold">0.0g C</span>
+            <span id="reviewTotalFat" class="text-amber-400 font-bold">0.0g F</span>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+          <button type="button" onclick="closeMealReviewModal()"
+            class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            data-i18n="cancel_btn">Cancelar</button>
+          <button type="button" id="saveReviewedMealBtn"
+            class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition active:scale-95"
+            data-i18n="save_meal_btn">Guardar Comida</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL 2: TDEE & GOALS CALCULATOR MODAL -->
+  <div id="tdeeCalculatorModal" class="modal-overlay modal-hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+    <div class="modal-content bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl shadow-2xl p-6 space-y-6 my-8">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span data-i18n="calculator_modal_title">Calculadora Metabólica TDEE y Metas</span>
+        </h3>
+        <button onclick="closeCalculatorModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <form id="tdeeCalculatorForm" class="space-y-4" onsubmit="event.preventDefault();">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <!-- Gender -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_gender_label">Género</label>
+            <select id="calcGender" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500">
+              <option value="male" data-i18n="calc_gender_male">Masculino</option>
+              <option value="female" data-i18n="calc_gender_female">Femenino</option>
+            </select>
+          </div>
+          <!-- Age -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_age_label">Edad (años)</label>
+            <input type="number" id="calcAge" min="12" max="110" value="30"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500" />
+          </div>
+          <!-- Weight -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_weight_label">Peso actual (kg)</label>
+            <input type="number" step="0.5" id="calcWeight" min="30" max="300" value="70"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500" />
+          </div>
+          <!-- Height -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_height_label">Altura (cm)</label>
+            <input type="number" id="calcHeight" min="100" max="250" value="170"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <!-- Structured Activity Level -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_activity_label">Actividad Estructurada</label>
+            <select id="calcActivity" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500">
+              <option value="sedentary" data-i18n="act_sedentary">Sedentario (1.2)</option>
+              <option value="light" data-i18n="act_light">Ligero (1.375)</option>
+              <option value="moderate" data-i18n="act_moderate">Moderado (1.55)</option>
+              <option value="very_active" data-i18n="act_very_active">Muy Activo (1.725)</option>
+              <option value="extra_active" data-i18n="act_extra_active">Extra Activo (1.9)</option>
+            </select>
+          </div>
+          <!-- Nutritional Goal -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_goal_label">Objetivo Nutricional</label>
+            <select id="calcGoal" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500">
+              <option value="deficit_mild" data-i18n="goal_deficit_mild">Déficit Suave (-15%)</option>
+              <option value="deficit_aggressive" data-i18n="goal_deficit_aggressive">Déficit Agresivo (-25%)</option>
+              <option value="maintenance" selected data-i18n="goal_maintenance">Mantenimiento (0%)</option>
+              <option value="surplus_mild" data-i18n="goal_surplus_mild">Superávit Suave (+10%)</option>
+              <option value="surplus_aggressive" data-i18n="goal_surplus_aggressive">Superávit Agresivo (+20%)</option>
+            </select>
+          </div>
+          <!-- Macro Strategy -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="calc_macro_strategy_label">Estrategia de Macros</label>
+            <select id="calcMacroStrategy" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500">
+              <option value="balanced" selected data-i18n="strat_balanced">Balanceado (30% P / 40% C / 30% F)</option>
+              <option value="high_protein" data-i18n="strat_high_protein">Alto en Proteína (35% P / 40% C / 25% F)</option>
+              <option value="low_carb" data-i18n="strat_low_carb">Bajo en Carbohidratos (35% P / 20% C / 45% F)</option>
+              <option value="high_carb" data-i18n="strat_high_carb">Alto en Carbohidratos (20% P / 60% C / 20% F)</option>
+              <option value="low_fat" data-i18n="strat_low_fat">Bajo en Grasa (30% P / 55% C / 15% F)</option>
+            </select>
+          </div>
+        </div>
+      </form>
+
+      <!-- Live Calculated Results Box -->
+      <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400" data-i18n="calc_results_title">Resultados Calculados</span>
+          <span class="text-[10px] text-slate-500">Mifflin-St Jeor Validado</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div class="bg-slate-900/90 rounded-lg p-3 border border-slate-800">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="calc_bmr_label">BMR Basal</span>
+            <span id="previewBmrVal" class="text-lg font-bold text-slate-200 mt-0.5 block">0 kcal</span>
+          </div>
+          <div class="bg-slate-900/90 rounded-lg p-3 border border-slate-800">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="calc_tdee_label">TDEE Base</span>
+            <span id="previewTdeeVal" class="text-lg font-bold text-cyan-400 mt-0.5 block">0 kcal</span>
+          </div>
+          <div class="bg-slate-900/90 rounded-lg p-3 border border-slate-800">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block" data-i18n="calc_target_label">Meta Objetivo</span>
+            <span id="previewTargetVal" class="text-lg font-bold text-emerald-400 mt-0.5 block">0 kcal</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 pt-2 text-center text-xs font-mono">
+          <div class="p-2 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400">
+            <span class="block text-[10px] uppercase font-bold">Proteína</span>
+            <span id="previewProtVal" class="font-bold">0g (0%)</span>
+          </div>
+          <div class="p-2 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <span class="block text-[10px] uppercase font-bold">Carbohidratos</span>
+            <span id="previewCarbsVal" class="font-bold">0g (0%)</span>
+          </div>
+          <div class="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <span class="block text-[10px] uppercase font-bold">Grasa</span>
+            <span id="previewFatVal" class="font-bold">0g (0%)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3">
+        <button type="button" onclick="closeCalculatorModal()"
+          class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+          data-i18n="cancel_btn">Cancelar</button>
+        <button type="button" id="applyGoalsBtn"
+          class="px-5 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 text-xs font-bold rounded-lg shadow-lg transition active:scale-95"
+          data-i18n="calc_apply_btn">Aplicar como Mis Metas Activas</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL 3: API KEY SETTINGS MODAL -->
+  <div id="apiKeyModal" class="modal-overlay modal-hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="modal-content bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+          <span data-i18n="settings_modal_title">Configuración de API Key de Gemini</span>
+        </h3>
+        <button onclick="closeApiKeyModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <p class="text-xs text-slate-400" data-i18n="settings_modal_desc">
+        NutriPulse AI requiere una API Key de Google Gemini para procesar el lenguaje natural con el modelo gemini-2.5-flash.
+      </p>
+
+      <div class="bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs">
+        <span class="text-slate-400 block mb-1 font-medium">Estado actual:</span>
+        <span id="apiKeyConfigStatus" class="font-mono text-purple-400 font-bold">Verificando...</span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1" data-i18n="api_key_label">Nueva Clave de API</label>
+        <input type="password" id="apiKeyInput" placeholder="Pega tu clave AIzaSy..."
+          class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono" />
+      </div>
+
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+        class="text-[11px] text-purple-400 hover:text-purple-300 hover:underline block" data-i18n="get_key_link">
+        ¿No tienes una clave? Consíguela gratis en Google AI Studio →
+      </a>
+
+      <div class="flex items-center justify-end space-x-3 pt-2">
+        <button type="button" onclick="closeApiKeyModal()"
+          class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+          data-i18n="cancel_btn">Cancelar</button>
+        <button type="button" id="saveApiKeyBtn"
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg shadow transition"
+          data-i18n="save_key_btn">Guardar Clave</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL 4: DELETE MEAL CONFIRMATION MODAL -->
+  <div id="deleteConfirmModal" class="modal-overlay modal-hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="modal-content bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4 text-center">
+      <div class="w-12 h-12 mx-auto rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center text-xl">
+        🗑️
+      </div>
+      <h4 class="text-base font-bold text-white" data-i18n="delete_confirm_title">¿Eliminar comida?</h4>
+      <p class="text-xs text-slate-400" data-i18n="delete_confirm_desc">¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.</p>
+      <div class="flex items-center justify-center space-x-3 pt-2">
+        <button type="button" onclick="closeDeleteConfirmModal()"
+          class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+          data-i18n="cancel_btn">Cancelar</button>
+        <button type="button" id="confirmDeleteMealBtn"
+          class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg shadow transition"
+          data-i18n="confirm_delete_btn">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Scripts -->
+  <script src="/static/js/i18n.js"></script>
+  <script src="/static/js/charts.js"></script>
+  <script src="/static/js/steps.js"></script>
+  <script src="/static/js/calculator.js"></script>
+  <script src="/static/js/meals.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
